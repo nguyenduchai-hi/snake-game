@@ -20,12 +20,15 @@ SDL_Texture* tailTexture = nullptr;
 SDL_Texture* tristanaTexture = nullptr;
 Mix_Music* backgroundMusic = nullptr;
 TTF_Font* font = nullptr;
+SDL_Texture* foodTexture = nullptr;
+SDL_Texture* obstacleTexture = nullptr;
+
 SDL_Color textColor = { 255, 255, 255, 255 };
 
 int score = 0;
 bool running = true;
 bool inMenu = true;
-int speed = 300;
+int speed = 150;
 
 struct Point {
     int x, y;
@@ -51,6 +54,9 @@ void initSDL() {
     bodyTurnTexture = SDL_CreateTextureFromSurface(renderer, IMG_Load("img\\body_turn.png"));
     tailTexture = SDL_CreateTextureFromSurface(renderer, IMG_Load("img\\tail.png"));
     tristanaTexture = SDL_CreateTextureFromSurface(renderer, IMG_Load("img\\back.png"));
+    foodTexture = SDL_CreateTextureFromSurface(renderer, IMG_Load("img/food.png"));
+    obstacleTexture = SDL_CreateTextureFromSurface(renderer, IMG_Load("img/obstacle.png"));
+
 
     backgroundMusic = Mix_LoadMUS("img\\newjeans.wav");
     if (backgroundMusic) {
@@ -61,14 +67,39 @@ void initSDL() {
 }
 
 void spawnFood() {
-    food.x = rand() % (SCREEN_WIDTH / CELL_SIZE);
-    food.y = rand() % (SCREEN_HEIGHT / CELL_SIZE);
+    int maxAttempts = 100; // Giới hạn số lần thử để tránh vòng lặp vô tận
+    int attempts = 0;
+    bool valid;
+
+    do {
+        valid = true;
+        food.x = rand() % (SCREEN_WIDTH / CELL_SIZE);
+        food.y = rand() % (SCREEN_HEIGHT / CELL_SIZE);
+
+        // Kiểm tra xem mồi có trùng rắn không
+        for (const auto& segment : snake) {
+            if (segment.x == food.x && segment.y == food.y) {
+                valid = false;
+                break;
+            }
+        }
+
+        // Kiểm tra xem mồi có trùng chướng ngại vật không
+        for (const auto& obs : obstacles) {
+            if (obs.x == food.x && obs.y == food.y) {
+                valid = false;
+                break;
+            }
+        }
+
+        attempts++;
+        if (attempts >= maxAttempts) {
+            valid = true; // Nếu thử quá nhiều lần, dừng kiểm tra để tránh vòng lặp vô tận
+        }
+
+    } while (!valid);
 }
 
-void spawnObstacle() {
-    Point obs = { rand() % (SCREEN_WIDTH / CELL_SIZE), rand() % (SCREEN_HEIGHT / CELL_SIZE) };
-    obstacles.push_back(obs);
-}
 
 void moveSnake() {
     Point newHead = { snake[0].x + dx, snake[0].y + dy };
@@ -95,7 +126,7 @@ void moveSnake() {
     snake.insert(snake.begin(), newHead);
     if (newHead.x == food.x && newHead.y == food.y) {
         score += 10;
-        speed = std::max(30, speed - 5);  // Giảm delay để tăng tốc độ
+        speed = std::max(100, speed - 5);  // Giảm delay để tăng tốc độ
         spawnFood();
         spawnObstacle();
     }
@@ -135,6 +166,9 @@ void renderScore() {
 void render() {
     SDL_RenderClear(renderer);
     SDL_RenderCopy(renderer, tristanaTexture, NULL, NULL);
+    SDL_Rect foodRect = { food.x * CELL_SIZE, food.y * CELL_SIZE, CELL_SIZE, CELL_SIZE };
+    SDL_RenderCopy(renderer, foodTexture, NULL, &foodRect);
+
 
     for (size_t i = 0; i < snake.size(); i++) {
         SDL_Rect rect = { snake[i].x * CELL_SIZE, snake[i].y * CELL_SIZE, CELL_SIZE, CELL_SIZE };
@@ -151,7 +185,11 @@ void render() {
 
     SDL_SetRenderDrawColor(renderer, 255, 0, 0, 255);
     SDL_Rect foodRect = { food.x * CELL_SIZE, food.y * CELL_SIZE, CELL_SIZE, CELL_SIZE };
-    SDL_RenderFillRect(renderer, &foodRect);
+    for (const auto& obs : obstacles) {
+        SDL_Rect obsRect = { obs.x * CELL_SIZE, obs.y * CELL_SIZE, CELL_SIZE, CELL_SIZE };
+        SDL_RenderCopy(renderer, obstacleTexture, NULL, &obsRect);
+    }
+    
 
     SDL_SetRenderDrawColor(renderer, 0, 0, 255, 255);
     for (const auto& obs : obstacles) {
